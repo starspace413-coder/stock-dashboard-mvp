@@ -18,6 +18,7 @@ export default function DashboardClient() {
   const [ind, setInd] = useState<IndicatorsResponse | null>(null);
 
   const [error, setError] = useState<string | null>(null);
+  const [stockMsg, setStockMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const candleCount = history?.candles?.length ?? 0;
@@ -92,7 +93,8 @@ export default function DashboardClient() {
 
   async function loadTicker(t: string) {
     setLoading(true);
-    setError(null);
+    setStockMsg(null);
+    // keep global error for index section only
 
     // Backend mode
     if (API_BASE_URL) {
@@ -157,14 +159,20 @@ export default function DashboardClient() {
       setQuote(null);
       setHistory(null);
       setInd(null);
-      setError(`Demo 模式抓不到 ${t}（stooq）。建議先用 US:AAPL，或部署後端再完整支援。\n${e?.message || String(e)}`);
+      setStockMsg(`Demo 模式抓不到 ${t}（stooq）。你可以先試 US:AAPL；要完整支援請部署後端。`);
     }
 
     setLoading(false);
   }
 
   useEffect(() => {
-    loadTicker(normalizedTicker);
+    // In GitHub Pages demo mode (no backend), avoid auto-loading stock to prevent scary red errors.
+    // User can click quick switch / load manually.
+    if (API_BASE_URL) {
+      loadTicker(normalizedTicker);
+    } else {
+      setStockMsg('Demo 模式：個股資料需部署後端才會完整（你仍可嘗試載入 US:AAPL）。');
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -224,6 +232,13 @@ export default function DashboardClient() {
             {loading ? '載入中' : '載入'}
           </button>
         </div>
+
+        {stockMsg && (
+          <div className="card" style={{ marginTop: 12, borderColor: 'rgba(251,191,36,0.35)' }}>
+            <div style={{ fontWeight: 700 }}>提示</div>
+            <div className="small mono" style={{ whiteSpace: 'pre-wrap' }}>{stockMsg}</div>
+          </div>
+        )}
 
         {error && (
           <div className="card" style={{ marginTop: 12, borderColor: 'rgba(220,38,38,0.5)' }}>
