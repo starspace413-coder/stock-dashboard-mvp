@@ -266,7 +266,43 @@ export default function DashboardClient() {
         <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 12 }}>
           <div className="card">
             <div className="small">Quote</div>
-            <div className="mono small" style={{ whiteSpace: 'pre-wrap' }}>{quote ? JSON.stringify(quote, null, 2) : '—'}</div>
+            {quote ? (
+              <div style={{ marginTop: 8 }}>
+                <div className="row" style={{ justifyContent: 'space-between' }}>
+                  <div className="small">Ticker</div>
+                  <div className="mono small">{quote.ticker}</div>
+                </div>
+                <div className="row" style={{ justifyContent: 'space-between' }}>
+                  <div className="small">Price</div>
+                  <div className="mono small">{Number(quote.price).toLocaleString(undefined, { maximumFractionDigits: 4 })} {quote.currency}</div>
+                </div>
+                <div className="row" style={{ justifyContent: 'space-between' }}>
+                  <div className="small">O/H/L</div>
+                  <div className="mono small">
+                    {quote.open ?? '—'} / {quote.high ?? '—'} / {quote.low ?? '—'}
+                  </div>
+                </div>
+                <div className="row" style={{ justifyContent: 'space-between' }}>
+                  <div className="small">Volume</div>
+                  <div className="mono small">{quote.volume ? Number(quote.volume).toLocaleString() : '—'}</div>
+                </div>
+                <div className="row" style={{ justifyContent: 'space-between' }}>
+                  <div className="small">Source</div>
+                  <div className="mono small">{quote.source} · delayed={String(quote.is_delayed)}</div>
+                </div>
+                <div className="row" style={{ justifyContent: 'space-between' }}>
+                  <div className="small">TS</div>
+                  <div className="mono small">{new Date(quote.ts).toLocaleString()}</div>
+                </div>
+
+                <details style={{ marginTop: 8 }}>
+                  <summary className="small">raw</summary>
+                  <div className="mono small" style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(quote, null, 2)}</div>
+                </details>
+              </div>
+            ) : (
+              <div className="small" style={{ marginTop: 8, opacity: 0.85 }}>—</div>
+            )}
           </div>
           <div className="card">
             <div className="small">Indicators</div>
