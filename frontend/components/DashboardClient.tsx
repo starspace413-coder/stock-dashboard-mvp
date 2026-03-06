@@ -181,8 +181,18 @@ export default function DashboardClient() {
       <div className="grid grid-3">
         <div className="card">
           <div className="small">台股指數</div>
-          <div style={{ fontSize: 20, fontWeight: 700 }}>{twIndex?.price ?? '—'}</div>
-          <div className="small mono">{twIndex ? `${twIndex.source} · delayed=${twIndex.is_delayed}` : ''}</div>
+          <div style={{ fontSize: 20, fontWeight: 700 }}>
+            {twIndex ? Number(twIndex.price).toLocaleString() : '—'}
+          </div>
+          <div className="small mono">
+            {twIndex ? `${twIndex.source} · delayed=${twIndex.is_delayed} · ${new Date(twIndex.ts).toLocaleString()}` : ''}
+          </div>
+          {twIndex && (
+            <details style={{ marginTop: 8 }}>
+              <summary className="small">raw</summary>
+              <div className="mono small" style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(twIndex, null, 2)}</div>
+            </details>
+          )}
         </div>
         <div className="card">
           <div className="small">美股指數</div>
@@ -191,10 +201,16 @@ export default function DashboardClient() {
               {usIndices.map((x) => (
                 <div key={x.code} className="row" style={{ justifyContent: 'space-between' }}>
                   <div className="small">{x.name}</div>
-                  <div className="mono small">{x.price.toFixed(2)}</div>
+                  <div className="mono small">{Number(x.price).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
                 </div>
               ))}
-              <div className="small mono" style={{ marginTop: 6 }}>yahoo · delayed=true</div>
+              <div className="small mono" style={{ marginTop: 6 }}>
+                {`${usIndices[0]?.source ?? 'source'} · delayed=true · ${new Date(usIndices[0]?.ts ?? Date.now()).toLocaleString()}`}
+              </div>
+              <details style={{ marginTop: 8 }}>
+                <summary className="small">raw</summary>
+                <div className="mono small" style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(usIndices, null, 2)}</div>
+              </details>
             </div>
           ) : (
             <div className="small" style={{ marginTop: 6, opacity: 0.85 }}>—</div>
