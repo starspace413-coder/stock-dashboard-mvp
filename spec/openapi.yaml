@@ -1,0 +1,228 @@
+openapi: 3.1.0
+info:
+  title: Stock Market Dashboard API
+  version: 0.1.0
+  description: |
+    MVP API for a TW+US stock market dashboard.
+    Canonical ticker format: "{market}:{symbol}" e.g. "TW:2330", "US:AAPL".
+servers:
+  - url: http://localhost:8000
+paths:
+  /api/stocks/search:
+    get:
+      summary: Search stocks by ticker symbol or name
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema: { type: string, minLength: 1 }
+          description: Query string (symbol/name fuzzy match)
+        - in: query
+          name: market
+          required: false
+          schema:
+            type: string
+            enum: [TW, US]
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Stock'
+  /api/stock/{ticker}/quote:
+    get:
+      summary: Get latest quote (delayed for free sources)
+      parameters:
+        - in: path
+          name: ticker
+          required: true
+          schema:
+            type: string
+            pattern: '^(TW|US):[A-Z0-9.]{1,20}$'
+          description: Canonical ticker (e.g. TW:2330, US:AAPL)
+      responses:
+        '200':
+          description: Quote
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+        '404':
+          description: Unknown ticker
+  /api/stock/{ticker}/history:
+    get:
+      summary: Get historical OHLCV
+      parameters:
+        - in: path
+          name: ticker
+          required: true
+          schema:
+            type: string
+            pattern: '^(TW|US):[A-Z0-9.]{1,20}$'
+        - in: query
+          name: interval
+          required: false
+          schema:
+            type: string
+            enum: [1d]
+            default: 1d
+          description: MVP supports daily only; reserved for future 1m/5m.
+        - in: query
+          name: period
+          required: false
+          schema:
+            type: string
+            enum: [1mo, 3mo, 6mo, 1y, 2y, 5y, max]
+            default: 1y
+      responses:
+        '200':
+          description: OHLCV series
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ticker, interval, candles]
+                properties:
+                  ticker: { type: string }
+                  interval: { type: string }
+                  candles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Candle'
+  /api/stock/{ticker}/indicators:
+    get:
+      summary: Get technical indicators calculated from history
+      parameters:
+        - in: path
+          name: ticker
+          required: true
+          schema:
+            type: string
+            pattern: '^(TW|US):[A-Z0-9.]{1,20}$'
+        - in: query
+          name: interval
+          required: false
+          schema:
+            type: string
+            enum: [1d]
+            default: 1d
+        - in: query
+          name: period
+          required: false
+          schema:
+            type: string
+            enum: [1mo, 3mo, 6mo, 1y, 2y, 5y, max]
+            default: 1y
+        - in: query
+          name: types
+          required: true
+          schema:
+            type: string
+          description: Comma-separated indicator types. Supported: ma,rsi,macd
+      responses:
+        '200':
+          description: Indicator series
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndicatorsResponse'
+  /api/market/tw/index:
+    get:
+      summary: Get Taiwan market index snapshot
+      responses:
+        '200':
+          description: Index quote
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketIndex'
+  /api/market/us/indices:
+    get:
+      summary: Get US major indices snapshot (S&P 500, Nasdaq, Dow)
+      responses:
+        '200':
+          description: List of index quotes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MarketIndex'
+components:
+  schemas:
+    Stock:
+      type: object
+      required: [ticker, symbol, name, market, currency]
+      properties:
+        ticker: { type: string, example: 'TW:2330' }
+        symbol: { type: string, example: '2330' }
+        name: { type: string, example: '台積電' }
+        market:
+          type: string
+          enum: [TW, US]
+        currency: { type: string, example: 'TWD' }
+        sector: { type: [string, 'null'] }
+        industry: { type: [string, 'null'] }
+    Quote:
+      type: object
+      required: [ticker, ts, price, currency, source, is_delayed]
+      properties:
+        ticker: { type: string }
+        ts: { type: string, format: date-time }
+        price: { type: number }
+        change: { type: [number, 'null'] }
+        change_pct: { type: [number, 'null'] }
+        open: { type: [number, 'null'] }
+        high: { type: [number, 'null'] }
+        low: { type: [number, 'null'] }
+        volume: { type: [integer, 'null'] }
+        currency: { type: string }
+        source: { type: string, description: 'twse|yahoo|finmind|...' }
+        is_delayed: { type: boolean }
+    Candle:
+      type: object
+      required: [time, open, high, low, close]
+      properties:
+        time: { type: string, format: date-time }
+        open: { type: number }
+        high: { type: number }
+        low: { type: number }
+        close: { type: number }
+        volume: { type: [integer, 'null'] }
+    IndicatorsResponse:
+      type: object
+      required: [ticker, interval, period, indicators]
+      properties:
+        ticker: { type: string }
+        interval: { type: string }
+        period: { type: string }
+        indicators:
+          type: object
+          additionalProperties: true
+          description: |
+            Map from indicator key to series payload.
+            Example keys: ma_5, ma_20, rsi_14, macd_12_26_9
+    MarketIndex:
+      type: object
+      required: [code, name, ts, price, currency, source, is_delayed]
+      properties:
+        code: { type: string, example: 'TAIEX' }
+        name: { type: string, example: '加權指數' }
+        ts: { type: string, format: date-time }
+        price: { type: number }
+        change: { type: [number, 'null'] }
+        change_pct: { type: [number, 'null'] }
+        currency: { type: string }
+        source: { type: string }
+        is_delayed: { type: boolean }
