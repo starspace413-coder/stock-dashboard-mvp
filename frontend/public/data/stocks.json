@@ -1,0 +1,17 @@
+{
+  "version": "0.1",
+  "items": [
+    {"ticker":"TW:2330","symbol":"2330","name":"台積電","market":"TW","currency":"TWD","aliases":["TSMC","Taiwan Semiconductor","台積"]},
+    {"ticker":"TW:2317","symbol":"2317","name":"鴻海","market":"TW","currency":"TWD","aliases":["Foxconn","Hon Hai","鸿海"]},
+    {"ticker":"TW:2454","symbol":"2454","name":"聯發科","market":"TW","currency":"TWD","aliases":["MediaTek","联发科"]},
+    {"ticker":"TW:0050","symbol":"0050","name":"元大台灣50","market":"TW","currency":"TWD","aliases":["台灣50","台湾50"]},
+
+    {"ticker":"US:AAPL","symbol":"AAPL","name":"Apple","market":"US","currency":"USD","aliases":["蘋果","苹果"]},
+    {"ticker":"US:MSFT","symbol":"MSFT","name":"Microsoft","market":"US","currency":"USD","aliases":["微軟","微软"]},
+    {"ticker":"US:NVDA","symbol":"NVDA","name":"NVIDIA","market":"US","currency":"USD","aliases":["輝達","英偉達","英伟达"]},
+    {"ticker":"US:TSLA","symbol":"TSLA","name":"Tesla","market":"US","currency":"USD","aliases":["特斯拉"]},
+    {"ticker":"US:AMZN","symbol":"AMZN","name":"Amazon","market":"US","currency":"USD","aliases":["亞馬遜","亚马逊"]},
+    {"ticker":"US:GOOGL","symbol":"GOOGL","name":"Alphabet (Google)","market":"US","currency":"USD","aliases":["Google","谷歌"]},
+    {"ticker":"US:META","symbol":"META","name":"Meta","market":"US","currency":"USD","aliases":["Facebook","臉書","脸书"]}
+  ]
+}

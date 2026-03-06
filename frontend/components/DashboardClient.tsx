@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiGet, API_BASE_URL } from './api';
 import type { HistoryResponse, IndicatorsResponse, MarketIndex, Quote } from './types';
 import StockChart from './StockChart';
+import StockSearch from './StockSearch';
 import { fetchStooqDailyHistory, mapTickerToStooqSymbol } from './publicApis';
 
 const DEFAULT_TICKERS = ['TW:2330', 'US:AAPL'];
@@ -317,8 +318,12 @@ export default function DashboardClient() {
       </div>
 
       <div className="card">
-        <div style={{ fontWeight: 700 }}>搜尋（下一步接 DB）</div>
-        <div className="small">MVP 先放 UI，等我們把 stocks table + search endpoint 接上就會出現結果。</div>
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>搜尋（中文/英文/股號）</div>
+        <div className="small" style={{ marginBottom: 10, opacity: 0.85 }}>
+          直接打：台積 / 2330 / TSMC / AAPL / Apple… 點一下就會載入。
+        </div>
+        {/* search UI */}
+        <StockSearch onPick={(t) => { setTicker(t); loadTicker(t); }} />
       </div>
 
       {/* Debug info */}
