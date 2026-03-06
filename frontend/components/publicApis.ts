@@ -49,6 +49,54 @@ async function fetchStooqLast(symbol: string): Promise<number> {
   return close;
 }
 
+export type StooqCandle = { time: string; open: number; high: number; low: number; close: number; volume?: number | null };
+
+export async function fetchStooqDailyHistory(symbol: string): Promise<StooqCandle[]> {
+  // i=d for daily
+  const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(symbol)}&i=d`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`stooq ${res.status}`);
+  const text = await res.text();
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return [];
+
+  const out: StooqCandle[] = [];
+  // Date,Open,High,Low,Close,Volume
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',');
+    if (cols.length < 5) continue;
+    const [date, o, h, l, c, v] = cols;
+    const open = Number(o);
+    const high = Number(h);
+    const low = Number(l);
+    const close = Number(c);
+    if (![open, high, low, close].every(Number.isFinite)) continue;
+    out.push({
+      time: new Date(`${date}T00:00:00Z`).toISOString(),
+      open,
+      high,
+      low,
+      close,
+      volume: v ? Number(v) : null
+    });
+  }
+  return out;
+}
+
+export function mapTickerToStooqSymbol(ticker: string): string {
+  // Best-effort mapping
+  const t = ticker.trim().toUpperCase();
+  if (t.startsWith('US:')) {
+    const sym = t.split(':', 2)[1];
+    return `${sym.toLowerCase()}.us`;
+  }
+  if (t.startsWith('TW:')) {
+    const sym = t.split(':', 2)[1];
+    return `${sym.toLowerCase()}.tw`;
+  }
+  return ticker;
+}
+
 export async function fetchUsIndices(): Promise<Array<{ code: string; name: string; price: number }>> {
   const items = await Promise.all([
     fetchStooqLast('^spx').then((p) => ({ code: '^GSPC', name: 'S&P 500', price: p })),

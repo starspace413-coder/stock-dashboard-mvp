@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiGet, API_BASE_URL } from './api';
 import type { HistoryResponse, IndicatorsResponse, MarketIndex, Quote } from './types';
 import StockChart from './StockChart';
-import { fetchTaiexSnapshot, fetchUsIndices } from './publicApis';
+import { fetchTaiexSnapshot, fetchUsIndices, fetchStooqDailyHistory, mapTickerToStooqSymbol } from './publicApis';
 
 const DEFAULT_TICKERS = ['TW:2330', 'US:AAPL'];
 
@@ -86,29 +86,71 @@ export default function DashboardClient() {
   async function loadTicker(t: string) {
     setLoading(true);
     setError(null);
+
+    // Backend mode
+    if (API_BASE_URL) {
+      try {
+        const q = await apiGet<Quote>(`/api/stock/${encodeURIComponent(t)}/quote`);
+        setQuote(q);
+      } catch (e: any) {
+        setQuote(null);
+        setError(e?.message || String(e));
+      }
+
+      try {
+        const h = await apiGet<HistoryResponse>(
+          `/api/stock/${encodeURIComponent(t)}/history?interval=1d&period=1y`
+        );
+        setHistory(h);
+      } catch (e: any) {
+        setHistory(null);
+        setError((prev) => prev || (e?.message || String(e)));
+      }
+
+      try {
+        const r = await apiGet<IndicatorsResponse>(
+          `/api/stock/${encodeURIComponent(t)}/indicators?interval=1d&period=1y&types=ma,rsi,macd`
+        );
+        setInd(r);
+      } catch {
+        setInd(null);
+      }
+
+      setLoading(false);
+      return;
+    }
+
+    // GitHub Pages demo mode (no backend): use public APIs (stooq) best-effort
     try {
-      const q = await apiGet<Quote>(`/api/stock/${encodeURIComponent(t)}/quote`);
-      setQuote(q);
+      const stooq = mapTickerToStooqSymbol(t);
+      const candles = await fetchStooqDailyHistory(stooq);
+      setHistory({ ticker: t, interval: '1d', candles });
+
+      const last = candles[candles.length - 1];
+      if (last) {
+        setQuote({
+          ticker: t,
+          ts: last.time,
+          price: last.close,
+          currency: t.toUpperCase().startsWith('TW:') ? 'TWD' : 'USD',
+          source: 'stooq',
+          is_delayed: true,
+          open: last.open,
+          high: last.high,
+          low: last.low,
+          volume: last.volume ?? null
+        });
+      } else {
+        setQuote(null);
+      }
+
+      // Keep indicators empty in demo mode for now
+      setInd(null);
     } catch (e: any) {
       setQuote(null);
-      setError(e?.message || String(e));
-    }
-
-    try {
-      const h = await apiGet<HistoryResponse>(`/api/stock/${encodeURIComponent(t)}/history?interval=1d&period=1y`);
-      setHistory(h);
-    } catch (e: any) {
       setHistory(null);
-      setError((prev) => prev || (e?.message || String(e)));
-    }
-
-    try {
-      const r = await apiGet<IndicatorsResponse>(
-        `/api/stock/${encodeURIComponent(t)}/indicators?interval=1d&period=1y&types=ma,rsi,macd`
-      );
-      setInd(r);
-    } catch {
       setInd(null);
+      setError(`Demo 模式抓不到 ${t}（stooq）。建議先用 US:AAPL，或部署後端再完整支援。\n${e?.message || String(e)}`);
     }
 
     setLoading(false);
