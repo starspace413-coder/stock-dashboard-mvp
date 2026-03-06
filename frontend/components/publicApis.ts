@@ -1,13 +1,25 @@
 // Public (no-key) APIs for GitHub Pages demo.
 // Note: these endpoints may change; this is best-effort demo.
-// Uses corsproxy.io to bypass CORS restrictions in browser.
+// Uses public CORS proxies to bypass CORS restrictions in browser.
+// Important: public proxies can rate-limit or go down. We try multiple.
 
-const CORS_PROXY = 'https://corsproxy.io/?';
+const PROXIES = [
+  (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+];
 
 async function fetchViaProxy(url: string): Promise<Response> {
-  const res = await fetch(`${CORS_PROXY}${encodeURIComponent(url)}`, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`Proxy ${res.status}`);
-  return res;
+  let lastErr: any = null;
+  for (const makeUrl of PROXIES) {
+    try {
+      const res = await fetch(makeUrl(url), { cache: 'no-store' });
+      if (!res.ok) throw new Error(`proxy http ${res.status}`);
+      return res;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('All proxies failed');
 }
 
 export async function fetchTaiexSnapshot(): Promise<{ price: number; ts: string; source: string; is_delayed: boolean }> {
