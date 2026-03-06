@@ -1,10 +1,18 @@
 // Public (no-key) APIs for GitHub Pages demo.
 // Note: these endpoints may change; this is best-effort demo.
+// Uses corsproxy.io to bypass CORS restrictions in browser.
+
+const CORS_PROXY = 'https://corsproxy.io/?';
+
+async function fetchViaProxy(url: string): Promise<Response> {
+  const res = await fetch(`${CORS_PROXY}${encodeURIComponent(url)}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Proxy ${res.status}`);
+  return res;
+}
 
 export async function fetchTaiexSnapshot(): Promise<{ price: number; ts: string; source: string; is_delayed: boolean }> {
   const url = 'https://www.twse.com.tw/exchangeReport/MI_INDEX?response=json&type=IND';
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`TWSE ${res.status}`);
+  const res = await fetchViaProxy(url);
   const data: any = await res.json();
 
   let price: number | null = null;
@@ -38,8 +46,7 @@ export async function fetchTaiexSnapshot(): Promise<{ price: number; ts: string;
 // Stooq provides free CSV for US indices. It's delayed but good enough for demo.
 async function fetchStooqLast(symbol: string): Promise<number> {
   const url = `https://stooq.com/q/l/?s=${encodeURIComponent(symbol)}&f=sd2t2ohlcv&h&e=csv`;
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`stooq ${res.status}`);
+  const res = await fetchViaProxy(url);
   const text = await res.text();
   const lines = text.trim().split('\n');
   if (lines.length < 2) throw new Error('stooq empty');
@@ -54,8 +61,7 @@ export type StooqCandle = { time: string; open: number; high: number; low: numbe
 export async function fetchStooqDailyHistory(symbol: string): Promise<StooqCandle[]> {
   // i=d for daily
   const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(symbol)}&i=d`;
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`stooq ${res.status}`);
+  const res = await fetchViaProxy(url);
   const text = await res.text();
   const lines = text.trim().split('\n');
   if (lines.length < 2) return [];
