@@ -1,110 +1,121 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { apiGet, API_BASE_URL } from './api';
 import type { HistoryResponse, IndicatorsResponse, MarketIndex, Quote } from './types';
 import StockChart from './StockChart';
 import StockSearch from './StockSearch';
 import { fetchStooqDailyHistory, mapTickerToStooqSymbol } from './publicApis';
 
-const DEFAULT_TICKERS = ['TW:2330', 'US:AAPL'];
+const DEFAULT_TICKERS = ['TW:2330', 'US:AAPL', 'US:NVDA', 'US:TSLA'];
+
+function formatPrice(n: number, decimals = 2): string {
+  return n.toLocaleString(undefined, { maximumFractionDigits: decimals, minimumFractionDigits: decimals });
+}
+
+function formatVolume(n: number): string {
+  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return n.toString();
+}
+
+function ChangeTag({ change, pct }: { change?: number | null; pct?: number | null }) {
+  if (change == null && pct == null) return <span className="index-change">—</span>;
+  const isUp = (change ?? 0) >= 0;
+  const arrow = isUp ? '▲' : '▼';
+  const cls = isUp ? 'up' : 'down';
+  return (
+    <span className={`index-change ${cls}`}>
+      {arrow} {change != null ? formatPrice(Math.abs(change)) : ''}
+      {pct != null ? ` (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%)` : ''}
+    </span>
+  );
+}
+
+function Skeleton({ className }: { className: string }) {
+  return <div className={`skeleton ${className}`} />;
+}
+
+function IndexCard({ data, label }: { data: MarketIndex | null; label: string; key?: string }) {
+  const isUp = (data?.change ?? 0) >= 0;
+  return (
+    <div className={`card index-card ${data ? (isUp ? 'up' : 'down') : ''}`}>
+      <div className="index-name">{label}</div>
+      {data ? (
+        <>
+          <div className={`index-value ${isUp ? 'up-text' : 'down-text'}`}>
+            {formatPrice(data.price)}
+          </div>
+          <ChangeTag change={data.change} pct={data.change_pct} />
+          <div className="index-meta">
+            {data.source} · {new Date(data.ts).toLocaleTimeString()}
+          </div>
+        </>
+      ) : (
+        <>
+          <Skeleton className="skeleton-value" />
+          <Skeleton className="skeleton-text" />
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function DashboardClient() {
   const [twIndex, setTwIndex] = useState<MarketIndex | null>(null);
   const [usIndices, setUsIndices] = useState<MarketIndex[]>([]);
-
-  const [ticker, setTicker] = useState<string>(DEFAULT_TICKERS[1]);
+  const [ticker, setTicker] = useState<string>(DEFAULT_TICKERS[0]);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [history, setHistory] = useState<HistoryResponse | null>(null);
   const [ind, setInd] = useState<IndicatorsResponse | null>(null);
-
   const [error, setError] = useState<string | null>(null);
   const [stockMsg, setStockMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const candleCount = history?.candles?.length ?? 0;
+  const [activeIndicators, setActiveIndicators] = useState<string[]>(['ma']);
 
   const normalizedTicker = useMemo(() => {
     const raw = ticker.trim().toUpperCase();
     if (!raw) return raw;
     if (raw.includes(':')) return raw;
-    // Shorthand support:
-    // - "2330" => TW:2330
-    // - "AAPL" => US:AAPL
     if (/^\d{3,6}$/.test(raw)) return `TW:${raw}`;
     if (/^[A-Z.]{1,10}$/.test(raw)) return `US:${raw}`;
     return raw;
   }, [ticker]);
 
-  // Debug: log what's happening
-  const [debugLog, setDebugLog] = useState<string[]>([]);
-
+  // Load market indices
   useEffect(() => {
     (async () => {
-      const logs: string[] = [];
-
-      // If backend is configured, use it; otherwise fall back to public no-key APIs.
       if (API_BASE_URL) {
-        logs.push('Backend mode: ' + API_BASE_URL);
         try {
-          setError(null);
           const tw = await apiGet<MarketIndex>('/api/market/tw/index');
           setTwIndex(tw);
-          logs.push('TW index loaded');
-        } catch (e: any) {
-          logs.push('TW error: ' + (e?.message || String(e)));
-          setError(e?.message || String(e));
-        }
-
+        } catch { }
         try {
           const us = await apiGet<{ items: MarketIndex[] }>('/api/market/us/indices');
           setUsIndices(us.items || []);
-          logs.push('US indices loaded: ' + us.items?.length);
-        } catch (e: any) {
-          logs.push('US error: ' + (e?.message || String(e)));
-        }
-        setDebugLog(logs);
-        return;
+        } catch { }
+      } else {
+        try {
+          const res = await fetch('./data/taiex.json', { cache: 'no-store' });
+          if (res.ok) setTwIndex(await res.json());
+        } catch { }
+        try {
+          const res = await fetch('./data/us-indices.json', { cache: 'no-store' });
+          if (res.ok) {
+            const us = await res.json();
+            setUsIndices(us.items || []);
+          }
+        } catch { }
       }
-
-      // Static JSON (generated by GitHub Actions) — avoids browser CORS issues.
-      logs.push('Static JSON mode');
-      try {
-        setError(null);
-        const res = await fetch('./data/taiex.json', { cache: 'no-store' });
-        logs.push('taiex.json fetch status: ' + res.status);
-        if (!res.ok) throw new Error(`taiex.json ${res.status}`);
-        const tw: any = await res.json();
-        setTwIndex(tw);
-        logs.push('TAIEX loaded: ' + tw.price);
-      } catch (e: any) {
-        const msg = e?.message || String(e);
-        logs.push('TAIEX error: ' + msg);
-        setError(msg);
-      }
-
-      try {
-        const res = await fetch('./data/us-indices.json', { cache: 'no-store' });
-        logs.push('us-indices.json fetch status: ' + res.status);
-        if (!res.ok) throw new Error(`us-indices.json ${res.status}`);
-        const us: any = await res.json();
-        setUsIndices(us.items || []);
-        logs.push('US indices loaded: ' + us.items?.length);
-      } catch (e: any) {
-        const msg = e?.message || String(e);
-        logs.push('US error: ' + msg);
-      }
-
-      setDebugLog(logs);
     })();
   }, []);
 
-  async function loadTicker(t: string) {
+  const loadTicker = useCallback(async (t: string) => {
     setLoading(true);
     setStockMsg(null);
-    // keep global error for index section only
+    setError(null);
 
-    // Backend mode
     if (API_BASE_URL) {
       try {
         const q = await apiGet<Quote>(`/api/stock/${encodeURIComponent(t)}/quote`);
@@ -113,17 +124,14 @@ export default function DashboardClient() {
         setQuote(null);
         setError(e?.message || String(e));
       }
-
       try {
         const h = await apiGet<HistoryResponse>(
           `/api/stock/${encodeURIComponent(t)}/history?interval=1d&period=1y`
         );
         setHistory(h);
-      } catch (e: any) {
+      } catch {
         setHistory(null);
-        setError((prev) => prev || (e?.message || String(e)));
       }
-
       try {
         const r = await apiGet<IndicatorsResponse>(
           `/api/stock/${encodeURIComponent(t)}/indicators?interval=1d&period=1y&types=ma,rsi,macd`
@@ -132,230 +140,218 @@ export default function DashboardClient() {
       } catch {
         setInd(null);
       }
-
-      setLoading(false);
-      return;
-    }
-
-    // GitHub Pages demo mode (no backend): use public APIs (stooq) best-effort
-    try {
-      const stooq = mapTickerToStooqSymbol(t);
-      const candles = await fetchStooqDailyHistory(stooq);
-      setHistory({ ticker: t, interval: '1d', candles });
-
-      const last = candles[candles.length - 1];
-      if (last) {
-        setQuote({
-          ticker: t,
-          ts: last.time,
-          price: last.close,
-          currency: t.toUpperCase().startsWith('TW:') ? 'TWD' : 'USD',
-          source: 'stooq',
-          is_delayed: true,
-          open: last.open,
-          high: last.high,
-          low: last.low,
-          volume: last.volume ?? null
-        });
-      } else {
-        setQuote(null);
-      }
-
-      // Keep indicators empty in demo mode for now
-      setInd(null);
-    } catch (e: any) {
-      setQuote(null);
-      setHistory(null);
-      setInd(null);
-      setStockMsg(`Demo 模式抓不到 ${t}（stooq）。你可以先試 US:AAPL；要完整支援請部署後端。`);
-    }
-
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    // In GitHub Pages demo mode (no backend), avoid auto-loading stock to prevent scary red errors.
-    // User can click quick switch / load manually.
-    if (API_BASE_URL) {
-      loadTicker(normalizedTicker);
     } else {
-      setStockMsg('Demo 模式：個股資料需部署後端才會完整（你仍可嘗試載入 US:AAPL）。');
+      try {
+        const stooq = mapTickerToStooqSymbol(t);
+        const candles = await fetchStooqDailyHistory(stooq);
+        setHistory({ ticker: t, interval: '1d', candles });
+        const last = candles[candles.length - 1];
+        if (last) {
+          const prev = candles.length > 1 ? candles[candles.length - 2] : null;
+          const chg = prev ? last.close - prev.close : null;
+          const chgPct = prev && prev.close ? (chg! / prev.close * 100) : null;
+          setQuote({
+            ticker: t, ts: last.time, price: last.close,
+            currency: t.startsWith('TW:') ? 'TWD' : 'USD',
+            source: 'stooq', is_delayed: true,
+            open: last.open, high: last.high, low: last.low,
+            volume: last.volume ?? null,
+            change: chg ? Math.round(chg * 100) / 100 : null,
+            change_pct: chgPct ? Math.round(chgPct * 100) / 100 : null,
+          });
+        } else {
+          setQuote(null);
+        }
+        setInd(null);
+      } catch {
+        setQuote(null);
+        setHistory(null);
+        setInd(null);
+        setStockMsg(`無法載入 ${t}。請嘗試其他股票或部署後端。`);
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setLoading(false);
   }, []);
 
+  useEffect(() => {
+    loadTicker(normalizedTicker);
+  }, []);
+
+  const isUp = (quote?.change ?? 0) >= 0;
+
   return (
-    <div className="grid" style={{ gap: 16 }}>
-      <div className="grid grid-3">
-        <div className="card">
-          <div className="small">台股指數</div>
-          <div style={{ fontSize: 20, fontWeight: 700 }}>
-            {twIndex ? Number(twIndex.price).toLocaleString() : '—'}
+    <>
+      {/* Page header */}
+      <div className="page-header">
+        <div>
+          <div className="page-title">總覽儀表板</div>
+          <div className="page-subtitle">
+            {new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
           </div>
-          <div className="small mono">
-            {twIndex ? `${twIndex.source} · delayed=${twIndex.is_delayed} · ${new Date(twIndex.ts).toLocaleString()}` : ''}
-          </div>
-          {twIndex && (
-            <details style={{ marginTop: 8 }}>
-              <summary className="small">raw</summary>
-              <div className="mono small" style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(twIndex, null, 2)}</div>
-            </details>
-          )}
         </div>
-        <div className="card">
-          <div className="small">美股指數</div>
-          {usIndices.length ? (
-            <div style={{ marginTop: 6 }}>
-              {usIndices.map((x) => (
-                <div key={x.code} className="row" style={{ justifyContent: 'space-between' }}>
-                  <div className="small">{x.name}</div>
-                  <div className="mono small">{Number(x.price).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                </div>
-              ))}
-              <div className="small mono" style={{ marginTop: 6 }}>
-                {`${usIndices[0]?.source ?? 'source'} · delayed=true · ${new Date(usIndices[0]?.ts ?? Date.now()).toLocaleString()}`}
-              </div>
-              <details style={{ marginTop: 8 }}>
-                <summary className="small">raw</summary>
-                <div className="mono small" style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(usIndices, null, 2)}</div>
-              </details>
-            </div>
+        <div className="header-actions">
+          <span className="status-badge delayed">
+            <span className="pulse-dot" /> 延遲資料
+          </span>
+        </div>
+      </div>
+
+      {/* Market indices */}
+      <div className="section">
+        <div className="section-title">大盤指數</div>
+        <div className="grid grid-4">
+          <IndexCard data={twIndex} label="加權指數" />
+          {usIndices.length > 0 ? (
+            usIndices.map((idx: MarketIndex) => (
+              <IndexCard key={idx.code} data={idx} label={idx.name} />
+            ))
           ) : (
-            <div className="small" style={{ marginTop: 6, opacity: 0.85 }}>—</div>
+            <>
+              <IndexCard data={null} label="S&P 500" />
+              <IndexCard data={null} label="Nasdaq" />
+              <IndexCard data={null} label="Dow Jones" />
+            </>
           )}
         </div>
+      </div>
+
+      {/* Ticker selection + Quick switch */}
+      <div className="section">
         <div className="card">
-          <div className="small">快速切換</div>
-          <div className="row" style={{ marginTop: 8 }}>
-            {DEFAULT_TICKERS.map((t) => (
-              <button
-                key={t}
-                className="btn"
-                onClick={() => {
-                  setTicker(t);
-                  loadTicker(t);
-                }}
-              >
-                {t}
-              </button>
-            ))}
+          <div className="card-header">
+            <div className="card-title">個股查詢</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {DEFAULT_TICKERS.map((t) => (
+                <button
+                  key={t}
+                  className={`btn-chip btn ${normalizedTicker === t ? 'active' : ''}`}
+                  onClick={() => { setTicker(t); loadTicker(t); }}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="ticker-input-group">
+            <input
+              className="input mono"
+              value={ticker}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTicker(e.target.value)}
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                if (e.key === 'Enter') { setTicker(normalizedTicker); loadTicker(normalizedTicker); }
+              }}
+              placeholder="輸入股票代號：2330 / TW:2330 / AAPL / US:AAPL"
+            />
+            <button
+              className="btn btn-primary"
+              onClick={() => { setTicker(normalizedTicker); loadTicker(normalizedTicker); }}
+              disabled={loading}
+            >
+              {loading ? '⏳ 載入中...' : '🔍 查詢'}
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="card">
-        <div className="row" style={{ justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontWeight: 700 }}>個股</div>
-            <div className="small">輸入 ticker：例如 TW:2330 / US:AAPL</div>
-          </div>
-          <div className="small mono">candles={candleCount}</div>
-        </div>
-
-        <div className="row" style={{ marginTop: 12 }}>
-          <input
-            className="input mono"
-            value={ticker}
-            onChange={(e) => setTicker(e.target.value)}
-            placeholder="可輸入：2330 / TW:2330 / AAPL / US:AAPL"
-          />
-          <button
-            className="btn"
-            onClick={() => {
-              setTicker(normalizedTicker);
-              loadTicker(normalizedTicker);
-            }}
-            disabled={loading}
-          >
-            {loading ? '載入中' : '載入'}
-          </button>
-        </div>
-
-        {stockMsg && (
-          <div className="card" style={{ marginTop: 12, borderColor: 'rgba(251,191,36,0.35)' }}>
-            <div style={{ fontWeight: 700 }}>提示</div>
-            <div className="small mono" style={{ whiteSpace: 'pre-wrap' }}>{stockMsg}</div>
-          </div>
-        )}
-
-        {error && (
-          <div className="card" style={{ marginTop: 12, borderColor: 'rgba(220,38,38,0.5)' }}>
-            <div style={{ fontWeight: 700 }}>錯誤</div>
-            <div className="small mono" style={{ whiteSpace: 'pre-wrap' }}>{error}</div>
-          </div>
-        )}
-
-        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 12 }}>
-          <div className="card">
-            <div className="small">Quote</div>
-            {quote ? (
-              <div style={{ marginTop: 8 }}>
-                <div className="row" style={{ justifyContent: 'space-between' }}>
-                  <div className="small">Ticker</div>
-                  <div className="mono small">{quote.ticker}</div>
-                </div>
-                <div className="row" style={{ justifyContent: 'space-between' }}>
-                  <div className="small">Price</div>
-                  <div className="mono small">{Number(quote.price).toLocaleString(undefined, { maximumFractionDigits: 4 })} {quote.currency}</div>
-                </div>
-                <div className="row" style={{ justifyContent: 'space-between' }}>
-                  <div className="small">O/H/L</div>
-                  <div className="mono small">
-                    {quote.open ?? '—'} / {quote.high ?? '—'} / {quote.low ?? '—'}
-                  </div>
-                </div>
-                <div className="row" style={{ justifyContent: 'space-between' }}>
-                  <div className="small">Volume</div>
-                  <div className="mono small">{quote.volume ? Number(quote.volume).toLocaleString() : '—'}</div>
-                </div>
-                <div className="row" style={{ justifyContent: 'space-between' }}>
-                  <div className="small">Source</div>
-                  <div className="mono small">{quote.source} · delayed={String(quote.is_delayed)}</div>
-                </div>
-                <div className="row" style={{ justifyContent: 'space-between' }}>
-                  <div className="small">TS</div>
-                  <div className="mono small">{new Date(quote.ts).toLocaleString()}</div>
-                </div>
-
-                <details style={{ marginTop: 8 }}>
-                  <summary className="small">raw</summary>
-                  <div className="mono small" style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(quote, null, 2)}</div>
-                </details>
-              </div>
-            ) : (
-              <div className="small" style={{ marginTop: 8, opacity: 0.85 }}>—</div>
-            )}
-          </div>
-          <div className="card">
-            <div className="small">Indicators</div>
-            <div className="mono small" style={{ whiteSpace: 'pre-wrap' }}>{ind ? JSON.stringify(ind.indicators, null, 2) : '—'}</div>
-          </div>
-        </div>
-
-        <div className="card" style={{ marginTop: 12 }}>
-          <div className="small">K 線</div>
-          {history?.candles?.length ? <StockChart candles={history.candles} /> : <div className="small">—</div>}
-        </div>
-      </div>
-
-      <div className="card">
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>搜尋（中文/英文/股號）</div>
-        <div className="small" style={{ marginBottom: 10, opacity: 0.85 }}>
-          直接打：台積 / 2330 / TSMC / AAPL / Apple… 點一下就會載入。
-        </div>
-        {/* search UI */}
-        <StockSearch onPick={(t) => { setTicker(t); loadTicker(t); }} />
-      </div>
-
-      {/* Debug info */}
-      {debugLog.length > 0 && (
-        <div className="card" style={{ borderColor: 'rgba(255,255,0,0.3)' }}>
-          <div className="small" style={{ color: '#fbbf24' }}>Debug:</div>
-          {debugLog.map((log, i) => (
-            <div key={i} className="mono small" style={{ whiteSpace: 'pre-wrap' }}>{log}</div>
-          ))}
+      {/* Messages */}
+      {error && (
+        <div className="section">
+          <div className="banner banner-error">⚠️ {error}</div>
         </div>
       )}
-    </div>
+      {stockMsg && (
+        <div className="section">
+          <div className="banner banner-warning">💡 {stockMsg}</div>
+        </div>
+      )}
+
+      {/* Quote panel */}
+      {quote && (
+        <div className="section">
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <span style={{ fontSize: 18, fontWeight: 800 }}>{quote.ticker}</span>
+                <span className="muted" style={{ marginLeft: 12, fontSize: 12 }}>
+                  {quote.source} · {new Date(quote.ts).toLocaleString()}
+                </span>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div className={`mono ${isUp ? 'up-text' : 'down-text'}`} style={{ fontSize: 28, fontWeight: 800 }}>
+                  {formatPrice(quote.price)} <span style={{ fontSize: 14 }}>{quote.currency}</span>
+                </div>
+                <ChangeTag change={quote.change} pct={quote.change_pct} />
+              </div>
+            </div>
+
+            <div className="quote-grid">
+              <div className="quote-item">
+                <div className="quote-label">開盤</div>
+                <div className="quote-value">{quote.open != null ? formatPrice(quote.open) : '—'}</div>
+              </div>
+              <div className="quote-item">
+                <div className="quote-label">最高</div>
+                <div className="quote-value up-text">{quote.high != null ? formatPrice(quote.high) : '—'}</div>
+              </div>
+              <div className="quote-item">
+                <div className="quote-label">最低</div>
+                <div className="quote-value down-text">{quote.low != null ? formatPrice(quote.low) : '—'}</div>
+              </div>
+              <div className="quote-item">
+                <div className="quote-label">成交量</div>
+                <div className="quote-value">{quote.volume ? formatVolume(quote.volume) : '—'}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Chart */}
+      <div className="section">
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">
+              K 線圖 {history?.candles?.length ? `· ${history.candles.length} 根` : ''}
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {['ma', 'rsi', 'macd'].map((type: string) => (
+                <button
+                  key={type}
+                  className={`btn-chip btn ${activeIndicators.includes(type) ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveIndicators((prev: string[]) =>
+                      prev.includes(type) ? prev.filter((t: string) => t !== type) : [...prev, type]
+                    );
+                  }}
+                >
+                  {type.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+          {loading && !history ? (
+            <Skeleton className="skeleton-chart" />
+          ) : history?.candles?.length ? (
+            <StockChart candles={history.candles} />
+          ) : (
+            <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span className="muted">選擇股票以顯示 K 線圖</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="section">
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">搜尋股票</div>
+            <div className="card-label">輸入中文名稱、代號或英文名</div>
+          </div>
+          <StockSearch onPick={(t) => { setTicker(t); loadTicker(t); }} />
+        </div>
+      </div>
+    </>
   );
 }
