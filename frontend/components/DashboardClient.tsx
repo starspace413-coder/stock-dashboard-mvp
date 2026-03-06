@@ -25,8 +25,15 @@ export default function DashboardClient() {
   const candleCount = history?.candles?.length ?? 0;
 
   const normalizedTicker = useMemo(() => {
-    const t = ticker.trim().toUpperCase();
-    return t;
+    const raw = ticker.trim().toUpperCase();
+    if (!raw) return raw;
+    if (raw.includes(':')) return raw;
+    // Shorthand support:
+    // - "2330" => TW:2330
+    // - "AAPL" => US:AAPL
+    if (/^\d{3,6}$/.test(raw)) return `TW:${raw}`;
+    if (/^[A-Z.]{1,10}$/.test(raw)) return `US:${raw}`;
+    return raw;
   }, [ticker]);
 
   // Debug: log what's happening
@@ -221,7 +228,14 @@ export default function DashboardClient() {
           <div className="small">快速切換</div>
           <div className="row" style={{ marginTop: 8 }}>
             {DEFAULT_TICKERS.map((t) => (
-              <button key={t} className="btn" onClick={() => { setTicker(t); loadTicker(t); }}>
+              <button
+                key={t}
+                className="btn"
+                onClick={() => {
+                  setTicker(t);
+                  loadTicker(t);
+                }}
+              >
                 {t}
               </button>
             ))}
@@ -243,9 +257,16 @@ export default function DashboardClient() {
             className="input mono"
             value={ticker}
             onChange={(e) => setTicker(e.target.value)}
-            placeholder="TW:2330"
+            placeholder="可輸入：2330 / TW:2330 / AAPL / US:AAPL"
           />
-          <button className="btn" onClick={() => loadTicker(normalizedTicker)} disabled={loading}>
+          <button
+            className="btn"
+            onClick={() => {
+              setTicker(normalizedTicker);
+              loadTicker(normalizedTicker);
+            }}
+            disabled={loading}
+          >
             {loading ? '載入中' : '載入'}
           </button>
         </div>
