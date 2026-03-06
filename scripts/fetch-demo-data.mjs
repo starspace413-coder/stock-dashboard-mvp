@@ -14,30 +14,41 @@ async function fetchJson(url) {
 }
 
 function parseTaiex(data) {
-  let price = null;
+  // TWSE MI_INDEX format (2026-03) is returned as { tables: [{ fields, data }] }
+  // We look for the row with index name "發行量加權股價指數".
+  const tables = data?.tables;
+  if (Array.isArray(tables)) {
+    for (const t of tables) {
+      const rows = t?.data;
+      if (!Array.isArray(rows)) continue;
+      for (const row of rows) {
+        if (!Array.isArray(row) || !row.length) continue;
+        const name = String(row[0]).trim();
+        if (name === '發行量加權股價指數') {
+          const price = Number(String(row[1]).replaceAll(',', ''));
+          if (!Number.isFinite(price)) throw new Error('TAIEX price not numeric');
+          return price;
+        }
+      }
+    }
+  }
+
+  // Legacy fallback
   for (const key of ['data1', 'data9', 'data8', 'data']) {
     const rows = data?.[key];
     if (!Array.isArray(rows)) continue;
     for (const row of rows) {
       if (!Array.isArray(row)) continue;
       const rowStr = row.join(' ');
-      if (rowStr.includes('加權') || rowStr.includes('發行量加權') || rowStr.includes('TAIEX')) {
-        const nums = [];
-        for (const cell of row) {
-          const s = String(cell).replaceAll(',', '');
-          const v = Number(s);
-          if (Number.isFinite(v)) nums.push(v);
-        }
-        if (nums.length) {
-          price = nums[0];
-          break;
-        }
+      if (rowStr.includes('發行量加權股價指數')) {
+        const price = Number(String(row[1]).replaceAll(',', ''));
+        if (!Number.isFinite(price)) continue;
+        return price;
       }
     }
-    if (price !== null) break;
   }
-  if (price === null) throw new Error('Unable to parse TAIEX');
-  return price;
+
+  throw new Error('Unable to parse TAIEX');
 }
 
 function parseStooqLast(csvText) {
