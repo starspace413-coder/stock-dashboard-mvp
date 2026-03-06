@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { apiGet } from './api';
+import { apiGet, API_BASE_URL } from './api';
 import type { HistoryResponse, IndicatorsResponse, MarketIndex, Quote } from './types';
 import StockChart from './StockChart';
+import { fetchTaiexSnapshot, fetchUsIndices } from './publicApis';
 
 const DEFAULT_TICKERS = ['TW:2330', 'US:AAPL'];
 
@@ -28,17 +29,54 @@ export default function DashboardClient() {
 
   useEffect(() => {
     (async () => {
+      // If backend is configured, use it; otherwise fall back to public no-key APIs.
+      if (API_BASE_URL) {
+        try {
+          setError(null);
+          const tw = await apiGet<MarketIndex>('/api/market/tw/index');
+          setTwIndex(tw);
+        } catch (e: any) {
+          setError(e?.message || String(e));
+        }
+
+        try {
+          const us = await apiGet<{ items: MarketIndex[] }>('/api/market/us/indices');
+          setUsIndices(us.items || []);
+        } catch {
+          // allow empty
+        }
+        return;
+      }
+
       try {
         setError(null);
-        const tw = await apiGet<MarketIndex>('/api/market/tw/index');
-        setTwIndex(tw);
+        const tw = await fetchTaiexSnapshot();
+        setTwIndex({
+          code: 'TAIEX',
+          name: '加權指數',
+          ts: tw.ts,
+          price: tw.price,
+          currency: 'TWD',
+          source: tw.source,
+          is_delayed: tw.is_delayed
+        });
       } catch (e: any) {
         setError(e?.message || String(e));
       }
 
       try {
-        const us = await apiGet<{ items: MarketIndex[] }>('/api/market/us/indices');
-        setUsIndices(us.items || []);
+        const list = await fetchUsIndices();
+        setUsIndices(
+          list.map((x) => ({
+            code: x.code,
+            name: x.name,
+            ts: new Date().toISOString(),
+            price: x.price,
+            currency: 'USD',
+            source: 'stooq',
+            is_delayed: true
+          }))
+        );
       } catch {
         // allow empty
       }

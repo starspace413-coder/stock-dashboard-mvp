@@ -1,4 +1,6 @@
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+// For GitHub Pages demo we call public APIs directly from the browser.
+// If you deploy the FastAPI backend, you can override this via NEXT_PUBLIC_API_BASE_URL.
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
 export async function apiGet<T>(path: string): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
