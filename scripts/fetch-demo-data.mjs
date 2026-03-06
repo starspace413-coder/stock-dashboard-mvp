@@ -54,16 +54,30 @@ async function main() {
   await fs.mkdir(outDir, { recursive: true });
   const ts = new Date().toISOString();
 
-  // TAIEX
-  const twseUrl = 'https://www.twse.com.tw/exchangeReport/MI_INDEX?response=json&type=IND';
-  const twse = await fetchJson(twseUrl);
+  // TAIEX (TWSE OpenAPI JSON)
+  const twseUrl = 'https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX';
+  const rows = await fetchJson(twseUrl);
+  const row = Array.isArray(rows)
+    ? rows.find((r) => String(r?.['指數'] || '').includes('發行量加權股價指數'))
+    : null;
+  if (!row) throw new Error('Unable to find TAIEX row from TWSE OpenAPI');
+  const price = Number(String(row['收盤指數']).replaceAll(',', ''));
+  const changePoints = Number(String(row['漲跌點數']).replaceAll(',', ''));
+  const changeSign = String(row['漲跌']).trim();
+  const signedChange = Number.isFinite(changePoints)
+    ? (changeSign === '-' ? -changePoints : changePoints)
+    : null;
+  const changePct = Number(String(row['漲跌百分比']).replaceAll(',', ''));
+
   const taiex = {
     code: 'TAIEX',
     name: '加權指數',
     ts,
-    price: parseTaiex(twse),
+    price,
+    change: signedChange,
+    change_pct: Number.isFinite(changePct) ? changePct : null,
     currency: 'TWD',
-    source: 'twse',
+    source: 'twse-openapi',
     is_delayed: true
   };
   await fs.writeFile(path.join(outDir, 'taiex.json'), JSON.stringify(taiex, null, 2));
