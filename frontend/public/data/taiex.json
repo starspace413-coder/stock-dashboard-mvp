@@ -1,10 +1,10 @@
 {
   "code": "TAIEX",
   "name": "加權指數",
-  "ts": "2026-04-08T20:57:28.080Z",
-  "price": 33229.82,
-  "change": 657.39,
-  "change_pct": 2.02,
+  "ts": "2026-04-08T21:54:38.085Z",
+  "price": 34761.38,
+  "change": 1531.56,
+  "change_pct": 4.61,
   "currency": "TWD",
   "source": "twse-openapi",
   "is_delayed": true
