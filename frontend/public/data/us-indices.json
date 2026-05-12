@@ -1,11 +1,11 @@
 {
-  "ts": "2026-05-12T17:33:27.118Z",
+  "ts": "2026-05-12T19:22:15.675Z",
   "items": [
     {
       "code": "^GSPC",
       "name": "S&P 500",
-      "ts": "2026-05-12T17:33:27.118Z",
-      "price": 7368.3,
+      "ts": "2026-05-12T19:22:15.675Z",
+      "price": 7388.4,
       "currency": "USD",
       "source": "stooq",
       "is_delayed": true
@@ -13,8 +13,8 @@
     {
       "code": "^IXIC",
       "name": "Nasdaq",
-      "ts": "2026-05-12T17:33:27.118Z",
-      "price": 25886.61,
+      "ts": "2026-05-12T19:22:15.675Z",
+      "price": 25989.459,
       "currency": "USD",
       "source": "stooq",
       "is_delayed": true
@@ -22,8 +22,8 @@
     {
       "code": "^DJI",
       "name": "Dow Jones",
-      "ts": "2026-05-12T17:33:27.118Z",
-      "price": 49726.5,
+      "ts": "2026-05-12T19:22:15.675Z",
+      "price": 49763,
       "currency": "USD",
       "source": "stooq",
       "is_delayed": true
